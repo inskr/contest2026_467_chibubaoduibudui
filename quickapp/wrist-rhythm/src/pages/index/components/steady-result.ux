@@ -1,0 +1,239 @@
+<template>
+  <div class="page result-page result-page-{{ screenSize }} result-page-{{ screenViewport }}">
+    <text class="result-kicker">SESSION / COMPLETE</text>
+    <div class="completion-stage completion-stage-{{ screenViewport }}">
+      <div class="completion-halo completion-halo-{{ screenViewport }}"></div>
+      <div class="result-icon result-icon-{{ screenViewport }}"><text class="result-check result-check-{{ screenViewport }}">✓</text></div>
+    </div>
+    <text class="result-title result-title-{{ screenViewport }}">完成一次稳态</text>
+    <text class="result-subtitle">留意身体变化，不追求单次数值</text>
+
+    <div class="result-row result-row-{{ screenViewport }}">
+      <div class="result-name-wrap">
+        <text class="result-name">心率</text>
+        <text class="result-detail">{{ resultHeartRateDetail }}</text>
+      </div>
+      <text class="result-delta {{ heartRateImproved ? 'delta-good' : 'delta-neutral' }}">{{ resultHeartRateDelta }}</text>
+    </div>
+    <div class="result-row result-row-{{ screenViewport }}">
+      <div class="result-name-wrap">
+        <text class="result-name">压力</text>
+        <text class="result-detail">{{ resultStressDetail }}</text>
+      </div>
+      <text class="result-delta {{ stressImproved ? 'delta-good' : 'delta-neutral' }}">{{ resultStressDelta }}</text>
+    </div>
+
+    <div class="primary-button result-button result-button-{{ screenViewport }}" onclick="returnHome">
+      <text class="button-title">完成</text>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    screenSize: { type: String, default: 'regular' },
+    screenViewport: { type: String, default: 'normal' },
+    resultHeartRateDetail: { type: String, default: '' },
+    resultHeartRateDelta: { type: String, default: '' },
+    resultStressDetail: { type: String, default: '' },
+    resultStressDelta: { type: String, default: '' },
+    heartRateImproved: { type: Boolean, default: false },
+    stressImproved: { type: Boolean, default: false },
+  },
+  returnHome() { this.$emit('returnHome'); },
+};
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.result-page {
+  padding-top: 34px;
+}
+
+.result-kicker {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #67e8f9;
+}
+
+.completion-stage {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  margin-top: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.completion-halo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 90px;
+  height: 90px;
+  border-width: 2px;
+  border-color: #22d3ee;
+  border-radius: 45px;
+  opacity: 0;
+  animation-name: completion-enter;
+  animation-duration: 620ms;
+  animation-timing-function: ease-out;
+  animation-iteration-count: 1;
+}
+
+.result-icon {
+  width: 76px;
+  height: 76px;
+  border-width: 1px;
+  border-color: #247f96;
+  border-radius: 38px;
+  justify-content: center;
+  align-items: center;
+  background-color: #102338;
+}
+
+@keyframes completion-enter {
+  0% { opacity: 0.82; transform: scale(0.38); }
+  100% { opacity: 0; transform: scale(1.08); }
+}
+
+.result-check {
+  font-size: 34px;
+  font-weight: 700;
+  color: #67e8f9;
+}
+
+.result-title {
+  margin-top: 12px;
+  font-size: 27px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.result-subtitle {
+  margin-top: 3px;
+  font-size: 12px;
+  color: #8d91bd;
+}
+
+.result-row {
+  width: 338px;
+  height: 66px;
+  margin-top: 10px;
+  padding: 8px 18px;
+  border-width: 1px;
+  border-color: #343a74;
+  border-radius: 18px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #11152e;
+}
+
+.result-name-wrap {
+  flex-direction: column;
+}
+
+.result-name {
+  font-size: 17px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.result-detail {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #8d91bd;
+}
+
+.result-delta {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.delta-good {
+  color: #67e8f9;
+}
+
+.delta-neutral {
+  color: #a7a9c7;
+}
+
+.primary-button {
+  width: 272px;
+  height: 62px;
+  padding: 0 24px;
+  border-radius: 31px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  border-width: 1px;
+  border-color: #247f96;
+  background-color: #102338;
+}
+
+.button-title {
+  font-size: 23px;
+  font-weight: 700;
+  color: #a5f3fc;
+}
+
+.result-button {
+  width: 220px;
+  margin-top: 14px;
+}
+
+.result-page-compact {
+  padding-top: 34px;
+}
+
+.result-page-short {
+  padding-top: 8px;
+}
+
+.result-icon-short {
+  width: 42px;
+  height: 42px;
+  border-radius: 21px;
+}
+
+.completion-stage-short {
+  width: 52px;
+  height: 52px;
+  margin-top: 2px;
+}
+
+.completion-halo-short {
+  width: 50px;
+  height: 50px;
+  border-radius: 25px;
+}
+
+.result-check-short {
+  font-size: 26px;
+}
+
+.result-title-short {
+  margin-top: 4px;
+  font-size: 26px;
+}
+
+.result-row-short {
+  height: 54px;
+  margin-top: 6px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.result-button-short {
+  height: 44px;
+  margin-top: 8px;
+}
+</style>

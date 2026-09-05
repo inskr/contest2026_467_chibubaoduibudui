@@ -1,0 +1,10 @@
+<script>
+export default {
+  onCreate() {
+    console.log('腕上节律已启动');
+  },
+  onDestroy() {
+    console.log('腕上节律已退出');
+  },
+};
+</script>

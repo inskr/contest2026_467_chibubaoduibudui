@@ -1,0 +1,558 @@
+<import name="home-view" src="./components/home.ux"></import>
+<import name="steady-result-view" src="./components/steady-result.ux"></import>
+<import name="boxing-result-view" src="./components/boxing-result.ux"></import>
+<import name="breathing-view" src="./components/breathing.ux"></import>
+<import name="boxing-view" src="./components/boxing.ux"></import>
+
+<template>
+  <div class="app {{ screenClass }}">
+    <home-view
+      if="{{ view === 'home' }}"
+      screen-size="{{ screenSize }}"
+      screen-viewport="{{ screenViewport }}"
+      suggest="{{ suggest }}"
+      vital-pulse-class="{{ vitalPulseClass }}"
+      status-title="{{ statusTitle }}"
+      status-subtitle="{{ statusSubtitle }}"
+      heart-rate-text="{{ heartRateText }}"
+      stress-text="{{ stressText }}"
+      health-message="{{ healthMessage }}"
+      onstart-training="startTraining"
+      onstart-boxing="startBoxing">
+    </home-view>
+
+    <breathing-view
+      if="{{ view === 'breathing' }}"
+      screen-size="{{ screenSize }}"
+      screen-viewport="{{ screenViewport }}"
+      remaining-text="{{ remainingText }}"
+      breath-phase="{{ breathPhase }}"
+      breath-rhythm-class="{{ breathRhythmClass }}"
+      phase-label="{{ phaseLabel }}"
+      pattern-label="{{ patternLabel }}"
+      onstop-training="stopTraining">
+    </breathing-view>
+
+    <steady-result-view
+      if="{{ view === 'result' }}"
+      screen-size="{{ screenSize }}"
+      screen-viewport="{{ screenViewport }}"
+      result-heart-rate-detail="{{ resultHeartRateDetail }}"
+      result-heart-rate-delta="{{ resultHeartRateDelta }}"
+      result-stress-detail="{{ resultStressDetail }}"
+      result-stress-delta="{{ resultStressDelta }}"
+      heart-rate-improved="{{ heartRateImproved }}"
+      stress-improved="{{ stressImproved }}"
+      onreturn-home="returnHome">
+    </steady-result-view>
+
+    <boxing-view
+      if="{{ view === 'boxing' }}"
+      screen-size="{{ screenSize }}"
+      screen-viewport="{{ screenViewport }}"
+      boxing-remaining-text="{{ boxingRemainingText }}"
+      boxing-score-text="{{ boxingScoreText }}"
+      boxing-streak-text="{{ boxingStreakText }}"
+      boxing-combo-class="{{ boxingComboClass }}"
+      boxing-prompt="{{ boxingPrompt }}"
+      boxing-pace-label="{{ boxingPaceLabel }}"
+      boxing-target-class="{{ boxingTargetClass }}"
+      boxing-fallback="{{ boxingFallback }}"
+      boxing-message="{{ boxingMessage }}"
+      onsimulate-punch="simulatePunch"
+      onstop-boxing="stopBoxing">
+    </boxing-view>
+
+    <boxing-result-view
+      if="{{ view === 'boxingResult' }}"
+      screen-size="{{ screenSize }}"
+      screen-viewport="{{ screenViewport }}"
+      boxing-result-score="{{ boxingResultScore }}"
+      boxing-result-hits="{{ boxingResultHits }}"
+      boxing-result-streak="{{ boxingResultStreak }}"
+      boxing-result-heart-rate="{{ boxingResultHeartRate }}"
+      onreturn-home="returnHome">
+    </boxing-result-view>
+  </div>
+</template>
+
+<script>
+import steady from './steady.js';
+import boxing from './boxing.js';
+import reactive from './reactive.js';
+import clock from './session-clock.js';
+import lifecycle from './page-lifecycle.js';
+import { getRecent, subscribe, unsubscribe, DATA_TYPES } from './health.js';
+import { subscribeAccelerometer, unsubscribeAccelerometer } from './motion.js';
+import { getScreenLayout } from './device.js';
+
+const TYPES = [DATA_TYPES.HEART_RATE, DATA_TYPES.STRESS];
+
+function displayValue(value) {
+  return typeof value === 'number' ? String(Math.round(value)) : '--';
+}
+
+function displayDelta(value, unit) {
+  if (typeof value !== 'number') return '暂无数据';
+  const prefix = value > 0 ? '+' : '';
+  return `${prefix}${value} ${unit}`;
+}
+
+function displayPair(before, after, unit) {
+  if (typeof before !== 'number' || typeof after !== 'number') return '训练期间未取得数据';
+  return `${before} → ${after} ${unit}`;
+}
+
+export default {
+  private: {
+    screenClass: 'screen-round size-regular',
+    screenSize: 'regular',
+    screenViewport: 'normal',
+    view: 'home',
+    heartRate: null,
+    stress: null,
+    heartRates: [],
+    stresses: [],
+    heartRateText: '--',
+    stressText: '--',
+    suggest: false,
+    vitalPulseClass: 'pulse-a',
+    vitalPulseGeneration: 0,
+    statusTitle: '正在感受你的节律',
+    statusSubtitle: '保持自然，数据将很快出现',
+    healthMessage: '',
+    trainingClock: null,
+    boxingClock: null,
+    resourceController: null,
+    visible: false,
+    cycleStartElapsed: 0,
+    currentPattern: steady.PATTERNS.standard,
+    patternLabel: '标准节奏 · 4-2-4',
+    breathPhase: 'inhale',
+    breathRhythmClass: 'rhythm-standard',
+    phaseLabel: '慢慢吸气',
+    remainingText: '60',
+    timer: null,
+    baseline: { heartRate: null, stress: null },
+    resultHeartRateDetail: '',
+    resultHeartRateDelta: '',
+    resultStressDetail: '',
+    resultStressDelta: '',
+    heartRateImproved: false,
+    stressImproved: false,
+    boxingBeatAt: 0,
+    boxingNextBeatAt: 0,
+    boxingBeatHit: false,
+    boxingStats: boxing.createStats(),
+    boxingDetector: null,
+    boxingRemainingText: '30',
+    boxingScoreText: '0',
+    boxingStreakText: '0',
+    boxingComboClass: 'combo-calm',
+    boxingPrompt: '准备',
+    boxingPaceLabel: '正在读取心率节拍',
+    boxingTargetClass: 'target-waiting',
+    boxingFallback: false,
+    boxingMessage: '',
+    motionConnected: false,
+    motionConnectTimer: null,
+    boxingBaselineHeartRate: null,
+    boxingResultScore: '0',
+    boxingResultHits: '0 / 0',
+    boxingResultStreak: '0',
+    boxingResultHeartRate: '训练期间未取得数据',
+  },
+
+  onReady() {
+    getScreenLayout().then((screenLayout) => this.applyScreenLayout(screenLayout));
+  },
+
+  onShow() {
+    this.visible = true;
+    this.ensureResourceController().enterForeground();
+    this.startHealth();
+    this.resumeActiveSession(Date.now());
+  },
+
+  onHide() {
+    this.visible = false;
+    this.ensureResourceController().leaveForeground();
+    this.pauseActiveSession(Date.now());
+    this.stopRuntimeResources();
+    this.stopHealth();
+  },
+
+  onDestroy() {
+    this.visible = false;
+    this.ensureResourceController().leaveForeground();
+    this.stopRuntimeResources();
+    this.stopHealth();
+  },
+
+  applyScreenLayout(screenLayout) {
+    this.screenClass = screenLayout.className;
+    this.screenSize = screenLayout.size;
+    this.screenViewport = screenLayout.viewport;
+  },
+
+  ensureResourceController() {
+    if (this.resourceController === null) {
+      this.resourceController = lifecycle.createResourceController({
+        healthTypes: TYPES,
+        getRecentHealth: getRecent,
+        subscribeHealth: subscribe,
+        unsubscribeHealth: unsubscribe,
+        subscribeMotion: subscribeAccelerometer,
+        unsubscribeMotion: unsubscribeAccelerometer,
+        onHealthSample: (sample) => this.applySample(sample),
+        onHealthError: (error) => this.applyHealthError(error),
+        onMotionSample: (sample) => this.applyMotionSample(sample),
+        onMotionError: (error) => this.enableBoxingFallback(error),
+      });
+    }
+    return this.resourceController;
+  },
+
+  startHealth() {
+    const needsRecent = this.heartRate === null && this.stress === null;
+    this.ensureResourceController().startHealth(needsRecent);
+  },
+
+  stopHealth() {
+    this.ensureResourceController().stopHealth();
+  },
+
+  applySample(sample) {
+    if (!sample || !sample.ok) return;
+    if (sample.dataType === DATA_TYPES.HEART_RATE) {
+      this.heartRate = sample.value;
+      this.heartRateText = displayValue(sample.value);
+      this.heartRates = steady.pushWindow(
+        this.heartRates,
+        sample.value,
+        steady.SAMPLE_WINDOW,
+      );
+    } else if (sample.dataType === DATA_TYPES.STRESS) {
+      this.stress = sample.value;
+      this.stressText = displayValue(sample.value);
+      this.stresses = steady.pushWindow(this.stresses, sample.value, steady.SAMPLE_WINDOW);
+    }
+    if (this.view === 'home') {
+      this.vitalPulseGeneration += 1;
+      this.vitalPulseClass = this.vitalPulseGeneration % 2 === 0 ? 'pulse-a' : 'pulse-b';
+    }
+    this.healthMessage = '';
+    this.updateSuggestion();
+  },
+
+  applyHealthError(error) {
+    this.healthMessage = error && error.unsupported
+      ? '当前设备暂不支持健康数据'
+      : '健康数据暂不可用，仍可进行训练';
+  },
+
+  updateSuggestion() {
+    const state = steady.shouldSuggest(this.heartRates, this.stresses);
+    this.suggest = state.suggest;
+    if (state.suggest) {
+      this.statusTitle = '建议缓一缓';
+      this.statusSubtitle = '用一分钟找回平稳节律';
+    } else if (this.heartRate !== null || this.stress !== null) {
+      this.statusTitle = '当前节律平稳';
+      this.statusSubtitle = '也可以主动做一次呼吸训练';
+    }
+  },
+
+  startTraining() {
+    this.clearTimer();
+    this.baseline = { heartRate: this.heartRate, stress: this.stress };
+    this.currentPattern = steady.selectPattern(this.stress, this.heartRate, this.heartRate);
+    this.cycleStartElapsed = 0;
+    this.trainingClock = clock.createClock(steady.SESSION_MS, Date.now());
+    this.view = 'breathing';
+    this.updatePatternLabel();
+    this.tick();
+    this.timer = setInterval(() => this.tick(), 250);
+  },
+
+  tick() {
+    const now = Date.now();
+    const elapsed = clock.elapsedMs(this.trainingClock, now);
+    if (clock.isComplete(this.trainingClock, now)) {
+      this.completeTraining();
+      return;
+    }
+
+    let cycleElapsed = elapsed - this.cycleStartElapsed;
+    let cycleDuration = this.patternDuration(this.currentPattern);
+    if (cycleElapsed >= cycleDuration) {
+      this.cycleStartElapsed += cycleDuration;
+      this.currentPattern = steady.selectPattern(
+        this.stress,
+        this.heartRate,
+        this.baseline.heartRate,
+      );
+      cycleElapsed = elapsed - this.cycleStartElapsed;
+      cycleDuration = this.patternDuration(this.currentPattern);
+      if (cycleElapsed >= cycleDuration) this.cycleStartElapsed = elapsed;
+      this.updatePatternLabel();
+    }
+
+    const phase = steady.phaseAt(elapsed - this.cycleStartElapsed, this.currentPattern);
+    reactive.writeIfChanged(this, 'breathPhase', phase.phase);
+    reactive.writeIfChanged(this, 'phaseLabel', phase.label);
+    reactive.writeIfChanged(this, 'remainingText', String(Math.ceil((steady.SESSION_MS - elapsed) / 1000)));
+  },
+
+  patternDuration(pattern) {
+    return pattern.inhaleMs + pattern.holdMs + pattern.exhaleMs;
+  },
+
+  updatePatternLabel() {
+    const calming = this.currentPattern.name === 'calming';
+    this.breathRhythmClass = calming ? 'rhythm-calming' : 'rhythm-standard';
+    this.patternLabel = calming ? '舒缓节奏 · 4-2-6' : '标准节奏 · 4-2-4';
+  },
+
+  stopTraining() {
+    this.clearTimer();
+    this.view = 'home';
+  },
+
+  completeTraining() {
+    this.clearTimer();
+    const result = steady.buildResult(this.baseline, {
+      heartRate: this.heartRate,
+      stress: this.stress,
+    });
+    this.resultHeartRateDetail = displayPair(
+      result.beforeHeartRate,
+      result.afterHeartRate,
+      'bpm',
+    );
+    this.resultHeartRateDelta = displayDelta(result.heartRateDelta, 'bpm');
+    this.resultStressDetail = displayPair(result.beforeStress, result.afterStress, '分');
+    this.resultStressDelta = displayDelta(result.stressDelta, '分');
+    this.heartRateImproved = typeof result.heartRateDelta === 'number' && result.heartRateDelta < 0;
+    this.stressImproved = typeof result.stressDelta === 'number' && result.stressDelta < 0;
+    this.view = 'result';
+  },
+
+  clearTimer() {
+    if (this.timer !== null) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  },
+
+  returnHome() {
+    this.view = 'home';
+  },
+
+  pauseActiveSession(now) {
+    if (this.view === 'breathing') {
+      this.trainingClock = clock.pauseClock(this.trainingClock, now);
+    } else if (this.view === 'boxing') {
+      this.boxingClock = clock.pauseClock(this.boxingClock, now);
+    }
+  },
+
+  resumeActiveSession(now) {
+    if (this.view === 'breathing') {
+      lifecycle.resumeSession(this.trainingClock, now, {
+        updateClock: (resumedClock) => { this.trainingClock = resumedClock; },
+        complete: () => this.completeTraining(),
+        rearm: () => {
+          this.tick();
+          if (this.view === 'breathing' && this.timer === null) {
+            this.timer = setInterval(() => this.tick(), 250);
+          }
+        },
+      });
+    } else if (this.view === 'boxing') {
+      const wasPaused = this.boxingClock && this.boxingClock.pausedAt !== null;
+      lifecycle.resumeSession(this.boxingClock, now, {
+        updateClock: (resumedClock) => { this.boxingClock = resumedClock; },
+        complete: () => this.finishBoxing(),
+        rearm: () => {
+          if (wasPaused) {
+            const elapsed = clock.elapsedMs(this.boxingClock, now);
+            const interval = boxing.beatIntervalForHeartRate(this.heartRate);
+            this.boxingBeatAt = 0;
+            this.boxingBeatHit = false;
+            this.boxingNextBeatAt = clock.nextBeatAfterResume(elapsed, interval);
+            this.motionConnected = false;
+            this.boxingFallback = false;
+            this.boxingMessage = '正在连接动作传感器';
+          }
+          this.startBoxingRuntime();
+          this.boxingTick();
+        },
+      });
+    }
+  },
+
+  startBoxing() {
+    this.stopRuntimeResources();
+    this.boxingClock = clock.createClock(boxing.GAME_MS, Date.now());
+    this.boxingBeatAt = 0;
+    this.boxingNextBeatAt = 900;
+    this.boxingBeatHit = false;
+    this.boxingStats = boxing.createStats();
+    this.boxingDetector = boxing.createPunchDetector();
+    this.boxingRemainingText = '30';
+    this.boxingScoreText = '0';
+    this.boxingStreakText = '0';
+    this.boxingComboClass = 'combo-calm';
+    this.boxingPrompt = '准备';
+    this.boxingPaceLabel = '正在读取心率节拍';
+    this.boxingTargetClass = 'target-waiting';
+    this.boxingFallback = false;
+    this.boxingMessage = '正在连接动作传感器';
+    this.motionConnected = false;
+    this.boxingBaselineHeartRate = this.heartRate;
+    this.view = 'boxing';
+    this.startBoxingRuntime();
+  },
+
+  startBoxingRuntime() {
+    this.ensureResourceController().startMotion();
+    if (this.motionConnectTimer === null) {
+      this.motionConnectTimer = setTimeout(() => {
+        if (!this.motionConnected && this.view === 'boxing') this.enableBoxingFallback();
+      }, 1600);
+    }
+    if (this.timer === null) this.timer = setInterval(() => this.boxingTick(), 50);
+  },
+
+  applyMotionSample(sample) {
+    if (this.view !== 'boxing') return;
+    if (!this.motionConnected) {
+      this.motionConnected = true;
+      this.boxingMessage = '';
+      this.clearMotionConnectTimer();
+    }
+    const now = Date.now();
+    if (this.boxingDetector && this.boxingDetector.push(sample, now)) this.registerPunch(now);
+  },
+
+  enableBoxingFallback() {
+    if (this.view !== 'boxing') return;
+    this.clearMotionConnectTimer();
+    this.stopMotion();
+    this.boxingFallback = true;
+    this.boxingMessage = '未检测到动作数据，已开启模拟模式';
+  },
+
+  boxingTick() {
+    const now = Date.now();
+    const elapsed = clock.elapsedMs(this.boxingClock, now);
+    if (clock.isComplete(this.boxingClock, now)) {
+      this.finishBoxing();
+      return;
+    }
+    reactive.writeIfChanged(this, 'boxingRemainingText', String(Math.ceil((boxing.GAME_MS - elapsed) / 1000)));
+
+    if (this.boxingBeatAt && !this.boxingBeatHit && elapsed - this.boxingBeatAt > boxing.HIT_WINDOW_MS) {
+      this.boxingStats = boxing.recordMiss(this.boxingStats);
+      this.boxingBeatAt = 0;
+      this.boxingPrompt = '跟上节拍';
+      this.boxingTargetClass = 'target-missed';
+      this.syncBoxingStats();
+    }
+
+    if (elapsed >= this.boxingNextBeatAt) {
+      const interval = boxing.beatIntervalForHeartRate(this.heartRate);
+      this.boxingBeatAt = this.boxingNextBeatAt;
+      this.boxingNextBeatAt += interval;
+      this.boxingBeatHit = false;
+      this.boxingPrompt = '出拳！';
+      this.boxingTargetClass = 'target-active';
+      this.boxingPaceLabel = interval === 1000
+        ? '活力节拍 · 60 次/分'
+        : interval === 1200
+          ? '平衡节拍 · 50 次/分'
+          : '舒缓节拍 · 43 次/分';
+    }
+  },
+
+  registerPunch(timestamp) {
+    if (!this.boxingBeatAt || this.boxingBeatHit) {
+      this.boxingPrompt = '等节拍亮起';
+      return;
+    }
+    const effectiveElapsed = clock.elapsedMs(this.boxingClock, timestamp);
+    const scored = boxing.scorePunch(effectiveElapsed, this.boxingBeatAt);
+    if (!scored.points) return;
+    this.boxingStats = boxing.recordHit(this.boxingStats, scored.points);
+    this.boxingBeatHit = true;
+    this.boxingBeatAt = 0;
+    this.boxingTargetClass = 'target-hit';
+    this.boxingPrompt = scored.grade === 'perfect'
+      ? '精准！'
+      : scored.grade === 'good'
+        ? '很好！'
+        : '命中';
+    this.syncBoxingStats();
+  },
+
+  simulatePunch() {
+    if (this.boxingFallback && this.view === 'boxing') this.registerPunch(Date.now());
+  },
+
+  syncBoxingStats() {
+    this.boxingScoreText = String(this.boxingStats.score);
+    this.boxingStreakText = String(this.boxingStats.streak);
+    this.boxingComboClass = this.boxingStats.streak >= 5 ? 'combo-hot' : 'combo-calm';
+  },
+
+  stopBoxing() {
+    this.stopRuntimeResources();
+    this.view = 'home';
+  },
+
+  finishBoxing() {
+    if (this.boxingBeatAt && !this.boxingBeatHit) {
+      this.boxingStats = boxing.recordMiss(this.boxingStats);
+    }
+    this.stopRuntimeResources();
+    this.boxingResultScore = String(this.boxingStats.score);
+    this.boxingResultHits = `${this.boxingStats.hits} / ${this.boxingStats.targets}`;
+    this.boxingResultStreak = String(this.boxingStats.maxStreak);
+    this.boxingResultHeartRate = displayPair(
+      this.boxingBaselineHeartRate,
+      this.heartRate,
+      'bpm',
+    );
+    this.view = 'boxingResult';
+  },
+
+  clearMotionConnectTimer() {
+    if (this.motionConnectTimer !== null) {
+      clearTimeout(this.motionConnectTimer);
+      this.motionConnectTimer = null;
+    }
+  },
+
+  stopMotion() {
+    this.ensureResourceController().stopMotion();
+  },
+
+  stopRuntimeResources() {
+    this.clearTimer();
+    this.clearMotionConnectTimer();
+    this.stopMotion();
+  },
+};
+</script>
+
+<style>
+.app {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  background-color: #080b1d;
+  color: #f8fafc;
+}
+
+</style>
