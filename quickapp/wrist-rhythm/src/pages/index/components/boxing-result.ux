@@ -1,0 +1,229 @@
+<template>
+  <div class="page boxing-result-page boxing-result-page-{{ screenSize }} boxing-result-page-{{ screenViewport }}">
+    <text class="boxing-result-kicker">RHYTHM / COMPLETE</text>
+    <div class="completion-stage completion-stage-{{ screenViewport }}">
+      <div class="completion-halo completion-halo-{{ screenViewport }}"></div>
+      <text class="boxing-result-score boxing-result-score-{{ screenViewport }}">{{ boxingResultScore }}</text>
+    </div>
+    <text class="boxing-result-score-label">本局得分</text>
+
+    <div class="boxing-result-grid boxing-result-grid-{{ screenViewport }}">
+      <div class="boxing-result-cell boxing-result-cell-{{ screenViewport }}">
+        <text class="boxing-result-value">{{ boxingResultHits }}</text>
+        <text class="boxing-result-label">命中 / 目标</text>
+      </div>
+      <div class="boxing-result-cell boxing-result-cell-{{ screenViewport }}">
+        <text class="boxing-result-value coral">{{ boxingResultStreak }}</text>
+        <text class="boxing-result-label">最高连击</text>
+      </div>
+    </div>
+
+    <div class="boxing-hr-result boxing-hr-result-{{ screenViewport }}">
+      <text class="boxing-hr-label">心率变化</text>
+      <text class="boxing-hr-value">{{ boxingResultHeartRate }}</text>
+    </div>
+    <div class="primary-button result-button result-button-{{ screenViewport }}" onclick="returnHome">
+      <text class="button-title">完成</text>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    screenSize: { type: String, default: 'regular' },
+    screenViewport: { type: String, default: 'normal' },
+    boxingResultScore: { type: String, default: '0' },
+    boxingResultHits: { type: String, default: '0 / 0' },
+    boxingResultStreak: { type: String, default: '0' },
+    boxingResultHeartRate: { type: String, default: '训练期间未取得数据' },
+  },
+  returnHome() { this.$emit('returnHome'); },
+};
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.boxing-result-page {
+  padding-top: 38px;
+}
+
+.boxing-result-kicker {
+  font-size: 14px;
+  letter-spacing: 2px;
+  color: #fda4af;
+}
+
+.completion-stage {
+  position: relative;
+  width: 160px;
+  height: 82px;
+  margin-top: 1px;
+  justify-content: center;
+  align-items: center;
+}
+
+.completion-halo {
+  position: absolute;
+  left: 39px;
+  top: 0;
+  width: 80px;
+  height: 80px;
+  border-width: 2px;
+  border-color: #fb7185;
+  border-radius: 40px;
+  opacity: 0;
+  animation-name: completion-enter;
+  animation-duration: 620ms;
+  animation-timing-function: ease-out;
+  animation-iteration-count: 1;
+}
+
+.boxing-result-score {
+  font-size: 68px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+@keyframes completion-enter {
+  0% { opacity: 0.84; transform: scale(0.4); }
+  100% { opacity: 0; transform: scale(1.12); }
+}
+
+.boxing-result-score-label {
+  font-size: 16px;
+  color: #8d91bd;
+}
+
+.boxing-result-grid {
+  width: 330px;
+  height: 74px;
+  margin-top: 14px;
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+.boxing-result-cell {
+  width: 158px;
+  height: 74px;
+  border-width: 1px;
+  border-color: #49345f;
+  border-radius: 18px;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: #18142f;
+}
+
+.boxing-result-value {
+  font-size: 27px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.boxing-result-label {
+  font-size: 13px;
+  color: #8d91bd;
+}
+
+.boxing-hr-result {
+  width: 330px;
+  height: 52px;
+  margin-top: 10px;
+  padding: 0 18px;
+  border-width: 1px;
+  border-color: #49345f;
+  border-radius: 16px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #18142f;
+}
+
+.boxing-hr-label {
+  font-size: 16px;
+  color: #8d91bd;
+}
+
+.boxing-hr-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.coral {
+  color: #fda4af;
+}
+
+.primary-button {
+  width: 272px;
+  height: 62px;
+  padding: 0 24px;
+  border-radius: 31px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  border-width: 1px;
+  border-color: #9d415b;
+  background-color: #2a142b;
+}
+
+.button-title {
+  font-size: 23px;
+  font-weight: 700;
+  color: #fda4af;
+}
+
+.result-button {
+  width: 220px;
+  margin-top: 14px;
+}
+
+.boxing-result-page-compact {
+  padding-top: 34px;
+}
+
+.boxing-result-page-short {
+  padding-top: 8px;
+}
+
+.boxing-result-score-short {
+  font-size: 48px;
+}
+
+.completion-stage-short {
+  height: 58px;
+}
+
+.completion-halo-short {
+  left: 51px;
+  width: 56px;
+  height: 56px;
+  border-radius: 28px;
+}
+
+.boxing-result-grid-short {
+  height: 58px;
+  margin-top: 6px;
+}
+
+.boxing-result-cell-short {
+  height: 58px;
+}
+
+.boxing-hr-result-short {
+  height: 40px;
+  margin-top: 5px;
+}
+
+.result-button-short {
+  height: 44px;
+  margin-top: 8px;
+}
+</style>

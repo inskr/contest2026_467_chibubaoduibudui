@@ -1,0 +1,24 @@
+{
+  "name": "wrist-rhythm",
+  "version": "1.0.0",
+  "description": "openvela 腕上身心训练快应用",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "aiot server --watch --open-nuttx",
+    "build": "aiot build",
+    "build:release": "node scripts/release-runner.js",
+    "release": "npm run build:release",
+    "watch": "aiot watch --open-nuttx",
+    "test:logic": "node test/steady.test.js && node test/runtime.test.js && node test/page-lifecycle.test.js && node test/component-contract.test.js && node test/release-runner.test.js",
+    "test": "npm run test:logic"
+  },
+  "devDependencies": {
+    "@aiot-toolkit/jsc": "^1.0.8",
+    "@aiot-toolkit/velasim": "^0.1.26",
+    "aiot-toolkit": "2.0.5",
+    "ux-types": "^1.7.0"
+  }
+}
